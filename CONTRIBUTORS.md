@@ -8,6 +8,6 @@ Each team member confirms their participation by putting a check mark in their o
 |---|---|---|
 | Volodymyr Baran | | ☐ |
 | Oleksandr Hlushchenko | [@Oleksandr-Hlushchenko](https://github.com/Oleksandr-Hlushchenko) | ✅ |
-| Yaroslav Panchenko | | ☐ |
+| Yaroslav Panchenko | | ✅ |
 | Roman Yarosh | | ☐ |
 | Ivan Oliynyk | | ☐ |
