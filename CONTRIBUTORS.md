@@ -6,7 +6,7 @@ Each team member confirms their participation by putting a check mark in their o
 
 | Team member | GitHub | Confirmed |
 |---|---|---|
-| Volodymyr Baran | [@vtangerineb](https://github.com/vtangerineb)| ☐ |
+| Volodymyr Baran | [@vtangerineb](https://github.com/vtangerineb)| ✅ |
 | Oleksandr Hlushchenko | [@Oleksandr-Hlushchenko](https://github.com/Oleksandr-Hlushchenko) | ✅ |
 | Yaroslav Panchenko | [@babySkyyy](https://github.com/babySkyyy)| ✅ |
 | Roman Yarosh | [@romanboss-hub](https://github.com/romanboss-hub)| ☐ |
