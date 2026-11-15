@@ -10,4 +10,8 @@ export const mapUk: UkOf<typeof mapEn> = {
   'map.occAttr': 'Окуповані території: Мінрозвитку №376',
   'map.satNearest': '(найближча доступна версія)',
   'map.satNearestEox': '(найближчий доступний рік)',
+  /** {date} = «липня 2024» (родовий відмінок) */
+  'map.satCaptured': 'Супутник: Esri World Imagery, знімок {date}',
+  'map.satNearestCapture': '(найближчий доступний)',
+  'map.satZoomIn': '· наблизьте, щоб побачити',
 };

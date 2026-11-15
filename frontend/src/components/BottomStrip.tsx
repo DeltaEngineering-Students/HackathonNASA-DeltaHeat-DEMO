@@ -29,7 +29,7 @@ import { YearBars } from './charts';
 import { Hint, Term } from './Hint';
 import type { GlossaryKey } from '../lib/glossary';
 import { muteApplies, useMapUi } from '../lib/mapUi';
-import { esriVersion, satMosaicYear } from '../lib/satellite';
+import { captureMonth, esriVersion, satMosaicYear } from '../lib/satellite';
 
 const LAYER_TERMS = new Set(['gap', 'lst', 'ndvi', 'dndvi']);
 
@@ -106,7 +106,7 @@ export function BottomStrip({ year, years, series, layer, layers, theme, onYear,
       <div className="strip-notes">
       {!overview && muteOn && <div className="mute-legend s" data-testid="mute-note"><span className="mute-key" aria-hidden="true" /><span><Term k="muteNonBuilt" side="above">{tr(l, 'strip.muted')}</Term>{tr(l, 'strip.mutedWhat')}</span></div>}
       {!overview && ui.basemap === 'sat' && <div className="xs sat-note" data-testid="sat-note">
-        <Term k="basemap" side="above">{tr(l, 'strip.basemap')}</Term>{ui.satEox ? tr(l, 'strip.basemapWhatEox', { year: satMosaicYear(year) }) : tr(l, 'strip.basemapWhat', { version: esriVersion(year).date.slice(0, 7) })}</div>}
+        <Term k="basemap" side="above">{tr(l, 'strip.basemap')}</Term>{ui.satEox ? tr(l, 'strip.basemapWhatEox', { year: satMosaicYear(year) }) : (ui.satShown?.captured ? tr(l, 'strip.basemapWhatCaptured', { date: captureMonth(l, ui.satShown.captured) }) : tr(l, 'strip.basemapWhat', { version: (ui.satShown?.date ?? esriVersion(year).date).slice(0, 7) }))}</div>}
       {!overview && ui.showReference && ui.reference === 'ok' && <div className="ref-legend s" data-testid="reference-legend"><span className="ref-key" aria-hidden="true" />{tr(l, 'strip.refDashes')}</div>}
       {!overview && ui.noScenes && <div className="noscn-legend s" data-testid="noscenes-legend"><span className="noscn-key" aria-hidden="true" />{(() => { const what = lowerFirst(ui.noScenes.replace(/^\d{4}:\s*/, ''), l); return <span lang={ukIfCyrillic(l, what)}>{tr(l, 'strip.crossHatch', { what, year })}</span>; })()}</div>}
       {fillNote && <div className="fill-legend s" data-testid="fill-legend"><span className="fill-key" aria-hidden="true" /><Term k="filledFromNeighbours" side="above">{fillNote}</Term></div>}

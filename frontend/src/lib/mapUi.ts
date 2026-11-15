@@ -2,7 +2,7 @@
 // without threading props through App. Remembered for the browser session (sessionStorage, best effort).
 import { useSyncExternalStore } from 'react';
 import type { ZoneGeometry } from '../api/types';
-import { satUseEox } from './satellite';
+import { satUseEox, type EsriShown } from './satellite';
 
 export type Basemap = 'map' | 'sat';
 export interface MapUi {
@@ -29,10 +29,12 @@ export interface MapUi {
   mapYear: number | null;
   /** satellite imagery comes from the EOX fallback (Esri failed this session, or `?sat=eox`) */
   satEox: boolean;
+  /** set by MapView: the Esri imagery shown (release date, capture date at the place when known) */
+  satShown: EsriShown | null;
 }
 
 const KEY = 'uhd-map-ui';
-const DEFAULTS: MapUi = { basemap: 'map', heatTransparency: 0, heatTouched: false, mute: 0.7, layer: 'gap', nonbuilt: null, showReference: false, reportId: null, reference: 'idle', zoneOutline: null, noScenes: null, mapYear: null, satEox: satUseEox() };
+const DEFAULTS: MapUi = { basemap: 'map', heatTransparency: 0, heatTouched: false, mute: 0.7, layer: 'gap', nonbuilt: null, showReference: false, reportId: null, reference: 'idle', zoneOutline: null, noScenes: null, mapYear: null, satEox: satUseEox(), satShown: null };
 let state: MapUi = (() => {
   try {
     const raw = sessionStorage.getItem(KEY);

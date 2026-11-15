@@ -30,8 +30,8 @@ async function withProdCsp(page: Page, violations: string[]) {
 
 // item 7: one «Шари» panel — basemap «Карта / Супутник», «Видимість тепла», («Розрив» + backend overlay) «Приглушити не-забудову».
 type M = { jumpTo(o: unknown): void; getZoom(): number; getLayer(id: string): unknown; getLayoutProperty(id: string, p: string): unknown; once(e: string, f: () => void): void; getStyle(): { layers: { id: string }[] }; loaded(): boolean };
-// hosts the page may talk to: our app/API, the OpenFreeMap basemap and (satellite on) Esri Wayback tiles — nothing else
-const ALLOWED = new Set(['localhost', '127.0.0.1', 'tiles.openfreemap.org', 'wayback.maptiles.arcgis.com']);
+// hosts the page may talk to: our app/API, the OpenFreeMap basemap and (satellite on) Esri Wayback tiles, release list and imagery metadata — nothing else
+const ALLOWED = new Set(['localhost', '127.0.0.1', 'tiles.openfreemap.org', 'wayback.maptiles.arcgis.com', 'metadata.maptiles.arcgis.com', 's3-us-west-2.amazonaws.com']);
 
 test('«Шари»: keyboard, satellite at z5–17 from Esri Wayback only, sliders remembered — under the production CSP', async ({ page }) => {
   const violations: string[] = [];
@@ -76,9 +76,9 @@ test('«Шари»: keyboard, satellite at z5–17 from Esri Wayback only, slide
   await panel.getByRole('radio', { name: 'Супутник' }).click();
   await expect(panel.getByRole('radio', { name: 'Супутник' })).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('sat-note')).toContainText('Esri World Imagery');
-  await expect.poll(() => page.evaluate(() => { const m = (globalThis as unknown as { __uhdMap: M }).__uhdMap; return m.getStyle().layers.filter((l) => /^sat-\d{4}$/.test(l.id) && m.getLayoutProperty(l.id, 'visibility') !== 'none').length; })).toBe(1);
+  await expect.poll(() => page.evaluate(() => { const m = (globalThis as unknown as { __uhdMap: M }).__uhdMap; return m.getStyle().layers.filter((l) => /^sat-w?\d+$/.test(l.id) && m.getLayoutProperty(l.id, 'visibility') !== 'none').length; })).toBe(1);
   await expect(page.locator('.maplibregl-ctrl-attrib')).toContainText('Esri World Imagery', { useInnerText: false });
-  await expect(page.locator('.sat-cap')).toContainText(/Супутник: Esri World Imagery, версія архіву \d{4}-\d{2}/);
+  await expect(page.locator('.sat-cap')).toContainText(/Супутник: Esri World Imagery, (версія архіву \d{4}-\d{2}|знімок \S+ \d{4})/);
 
   // map zoom z asks for 256-px raster tiles at ≈ z+1 (MapLibre's 512-px world), capped by the source maxzoom 19
   // (each step a little further east so its tiles are not already cached from the previous step)
@@ -96,11 +96,11 @@ test('«Шари»: keyboard, satellite at z5–17 from Esri Wayback only, slide
   await expect(panel).toHaveCount(0);
   await page.reload();
   await page.locator('.map[data-ready]').waitFor();
-  await expect.poll(() => page.evaluate(() => { const m = (globalThis as unknown as { __uhdMap: M }).__uhdMap; return m.getStyle().layers.filter((l) => /^sat-\d{4}$/.test(l.id) && m.getLayoutProperty(l.id, 'visibility') !== 'none').length; })).toBe(1);
+  await expect.poll(() => page.evaluate(() => { const m = (globalThis as unknown as { __uhdMap: M }).__uhdMap; return m.getStyle().layers.filter((l) => /^sat-w?\d+$/.test(l.id) && m.getLayoutProperty(l.id, 'visibility') !== 'none').length; })).toBe(1);
   await toggle.click();
   await expect(vis).toHaveText('40 %');
   await panel.getByRole('radio', { name: 'Карта' }).click();
-  await expect.poll(() => page.evaluate(() => { const m = (globalThis as unknown as { __uhdMap: M }).__uhdMap; return m.getStyle().layers.filter((l) => /^sat-\d{4}$/.test(l.id) && m.getLayoutProperty(l.id, 'visibility') !== 'none').length; })).toBe(0);
+  await expect.poll(() => page.evaluate(() => { const m = (globalThis as unknown as { __uhdMap: M }).__uhdMap; return m.getStyle().layers.filter((l) => /^sat-w?\d+$/.test(l.id) && m.getLayoutProperty(l.id, 'visibility') !== 'none').length; })).toBe(0);
   await expect(page.getByTestId('sat-note')).toHaveCount(0);
 
   expect([...hosts].filter((h) => !ALLOWED.has(h))).toEqual([]);

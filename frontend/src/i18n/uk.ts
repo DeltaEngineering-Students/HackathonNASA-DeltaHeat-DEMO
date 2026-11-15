@@ -214,6 +214,7 @@ export const uk: Messages = {
   'strip.mutedWhat': ': поля, ліси, луки',
   'strip.basemap': 'Підкладка',
   'strip.basemapWhat': ' — знімок Esri World Imagery, архів {version}',
+  'strip.basemapWhatCaptured': ' — Esri World Imagery, знімок {date}',
   'strip.basemapWhatEox': ' — знімок Sentinel‑2 {year}',
   'strip.refDashes': 'Пунктир — ліс-еталон',
   'strip.crossHatch': 'Перехресне штрихування — {what} (літо {year})',
@@ -277,6 +278,7 @@ export const uk: Messages = {
   'tools.refLoading': 'Завантажуємо контур…',
   'tools.refNone': 'Контур лісу-еталона для цієї ділянки поки недоступний.',
   'tools.satNote': 'Супутник: Esri World Imagery, архів {version}',
+  'tools.satNoteCaptured': 'Супутник: Esri World Imagery, знімок {date}',
   'tools.satNoteEox': 'Супутник: EOxCloudless {year} (Sentinel‑2, ~10 м)',
 
   'map.aria': 'Мапа теплового розриву',

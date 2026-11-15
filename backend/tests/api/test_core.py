@@ -486,6 +486,9 @@ def test_rb05_body_limit_request_id_and_security_headers(client):
     for d in ("img-src", "connect-src"):  # item 7 «Супутник»: EOX raster tiles are fetched by MapLibre
         assert "https://tiles.maps.eox.at" in csp[d].split(), d
         assert "https://wayback.maptiles.arcgis.com" in csp[d].split(), d
+    # satellite capture dates (frontend lib/wayback.ts): the Wayback release list and the per-release imagery metadata
+    assert "https://metadata.maptiles.arcgis.com" in csp["connect-src"].split()
+    assert "https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/" in csp["connect-src"].split()
 
 
 def test_rb09_strict_coordinates_and_hole_equal_to_shell(client):

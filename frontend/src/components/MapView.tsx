@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, LayerSpecification, Map as MlMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -14,7 +14,8 @@ import { basemapNameEn } from '../i18n/placeNameExpr';
 import { getMapUi, layerTransparency, muteApplies, REFERENCE_COLOR, setMapUi, useMapUi } from '../lib/mapUi';
 import { minViewOf, panBounds, showAllUkraine, uaFeatures, unionBox, viewLimits } from '../lib/ukraine';
 import { gloss } from '../lib/glossary';
-import { SAT_TIMEOUT_MS, isSatLayerId, rememberSatFallback, satAttributionFor, satCaption, satErrorCounts, satLayerId, satLayerYear, satMaxzoom, satProviderOf, satShouldFallback, satTilesFor, type SatProvider } from '../lib/satellite';
+import { SAT_TIMEOUT_MS, esriAttribution, esriLayerId, esriTiles, isSatLayerId, rememberSatFallback, satAttributionFor, satCaption, satErrorCounts, satLayerId, satLayerYear, satMaxzoom, satProviderOf, satShouldFallback, satTilesFor, type EsriShown, type SatProvider } from '../lib/satellite';
+import { esriChoice, probeSatSite, tileCentre, tileOf, unprobe, type SatSite } from '../lib/wayback';
 import { getLocale, tr, useLocale, type Locale } from '../i18n';
 import { DISPUTED_LAYERS, undisputedBorder, withoutImposed } from '../lib/basemapPolicy';
 import type { DrawMode } from '../state/store';
@@ -173,20 +174,72 @@ export function overviewZoom(frameZoom: number | null): number {
 /** a label under these is not picked: they have their own click, or it is outside Ukraine (veil) */
 const LABEL_BLOCKERS: ReadonlySet<string> = new Set(['ov-city', 'ov-district', 'hot-dot', 'hot-num', 'draft-fill', 'draft-line', 'draft-pts', 'veil']);
 const OVERLAY_IDS = new Set(['heat', 'heat-fill', 'mask', 'city', 'zone-halo', 'zone-line', 'draft-fill', 'draft-line', 'draft-pts', 'hot-dot', 'hot-num', 'hot-area', 'veil', 'ua-border', 'ua-ground', 'ua-water', 'ov-city', 'ov-district', 'nonbuilt', 'nolst-fill', 'nolst-label', 'war-line', 'war-hit', 'occ-fill', 'ref-fill', 'ref-line', 'noscn-fill', 'noscn-label']);
-// ── Satellite basemap: one raster source + layer per yearly version (Esri Wayback; EOX mosaic after a fallback), added
-// lazily and toggled (no blank frame on a year change: the new one is put UNDER the shown one and the old one is hidden
-// once the map is idle). Layer id `sat-YYYY` = the version year, whichever provider is active.
-const satWanted = new WeakMap<MlMap, number>();
+// ── Satellite basemap: one raster source + layer per imagery version (Esri Wayback: `sat-w<release>`, one per tile
+// version at the place, so years with the same picture share a layer; EOX mosaic after a fallback: `sat-YYYY`), added
+// lazily. A switch never blanks the map: the new layer goes UNDER the shown one, and the shown one fades out only once
+// the new source has loaded its tiles in view (or after SAT_SWAP_MAX_MS). At most SAT_KEEP sources stay on the map.
+const satWanted = new WeakMap<MlMap, string>();
 const satProv = new WeakMap<MlMap, SatProvider>();
+/** layer ids, most recently wanted last (pruning keeps the tail) */
+const satRecent = new WeakMap<MlMap, string[]>();
+const SAT_KEEP = 3;
+const SAT_SWAP_MAX_MS = 8000;
+const SAT_FADE_MS = 220;
 const satIds = (m: MlMap) => m.getStyle().layers.map((l) => l.id).filter(isSatLayerId);
+const satVisible = (m: MlMap, id: string) => m.getLayoutProperty(id, 'visibility') !== 'none';
+/** the sat layer drawn on top that is not fading out (the one the user sees) */
+const satTop = (m: MlMap) => satIds(m).filter((id) => satVisible(m, id) && m.getPaintProperty(id, 'raster-opacity') !== 0).pop();
+function pruneSatellite(m: MlMap) {
+  const keep = new Set((satRecent.get(m) ?? []).slice(-SAT_KEEP));
+  for (const id of satIds(m)) {
+    if (keep.has(id) || satVisible(m, id)) continue;
+    m.removeLayer(id);
+    if (m.getSource(id)) m.removeSource(id);
+  }
+}
+/** the wanted layer has its tiles: fade out whatever is drawn above it, then hide everything else */
 function settleSatellite(m: MlMap) {
   const want = satWanted.get(m);
-  if (want == null) return;
-  for (const id of satIds(m)) if (id !== satLayerId(want)) m.setLayoutProperty(id, 'visibility', 'none');
+  if (want == null || !m.getLayer(want)) return;
+  const others = satIds(m).filter((id) => id !== want && satVisible(m, id));
+  m.setPaintProperty(want, 'raster-opacity', 1);
+  const above = others.filter((id) => satIds(m).indexOf(id) > satIds(m).indexOf(want));
+  for (const id of others) if (!above.includes(id)) m.setLayoutProperty(id, 'visibility', 'none');
+  if (!above.length) { pruneSatellite(m); return; }
+  for (const id of above) {
+    m.setPaintProperty(id, 'raster-opacity-transition', { duration: SAT_FADE_MS, delay: 0 });
+    m.setPaintProperty(id, 'raster-opacity', 0);
+  }
+  window.setTimeout(() => {
+    for (const id of above) {
+      if (!m.getLayer(id) || satWanted.get(m) === id) continue;
+      m.setLayoutProperty(id, 'visibility', 'none');
+      m.setPaintProperty(id, 'raster-opacity-transition', { duration: 0, delay: 0 });
+      m.setPaintProperty(id, 'raster-opacity', 1);
+    }
+    pruneSatellite(m);
+  }, SAT_FADE_MS + 30);
+}
+/** call `done` once the source has the tiles of the current view (or after SAT_SWAP_MAX_MS), unless another version is wanted by then */
+function whenSatLoaded(m: MlMap, id: string, done: () => void) {
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    m.off('sourcedata', onData); m.off('idle', onIdle); window.clearTimeout(timer);
+    if (satWanted.get(m) === id) done();
+  };
+  const check = () => { if (satWanted.get(m) !== id) finish(); else if (m.getSource(id) && m.isSourceLoaded(id)) finish(); };
+  const onData = (e: { sourceId?: string; tile?: unknown }) => { if (e.sourceId === id && e.tile) check(); };
+  const onIdle = () => check();
+  m.on('sourcedata', onData);
+  m.on('idle', onIdle);
+  const timer = window.setTimeout(finish, SAT_SWAP_MAX_MS);
 }
 function clearSatellite(m: MlMap) {
   for (const id of satIds(m)) m.removeLayer(id);
   for (const id of Object.keys(m.getStyle().sources ?? {})) if (isSatLayerId(id)) m.removeSource(id);
+  satRecent.set(m, []);
 }
 // Esri health: tile failures (not 404) and answers per map; falls back to EOX for the session (satShouldFallback).
 // requests aborted by a page reload/navigation fail with no status: they are not an Esri outage
@@ -230,25 +283,71 @@ function watchEsri(m: MlMap) {
     ww.timer = window.setTimeout(() => { ww.timer = undefined; if (satProv.get(m) === 'esri' && satShouldFallback({ errors: ww.errors, answered: ww.answered, elapsedMs: Date.now() - ww.t0 })) esriFailed(m); }, SAT_TIMEOUT_MS);
   }
 }
-function showSatellite(m: MlMap, year: number | null) {
-  const prov = satProviderOf(getMapUi().satEox);
+/** one satellite layer to show: id, tiles and what the caption says */
+interface SatSpec { prov: SatProvider; id: string; tiles: string; maxzoom: number; attribution: string; release?: number; shown: EsriShown | null }
+/** `tz` = the tile zoom MapLibre draws at (256-px tiles: ≈ map zoom + 1) — below the dated imagery the caption says «zoom in» */
+function satSpec(prov: SatProvider, year: number | null, site: SatSite | null, tz?: number): SatSpec {
+  if (prov === 'eox') {
+    const ly = satLayerYear('eox', year);
+    return { prov, id: satLayerId(ly), tiles: satTilesFor('eox', ly), maxzoom: satMaxzoom('eox', ly), attribution: satAttributionFor('eox', ly), shown: null };
+  }
+  const c = esriChoice(year, site);
+  return { prov, id: esriLayerId(c.release), tiles: esriTiles(c.release), maxzoom: c.maxzoom, attribution: esriAttribution(), release: c.release, shown: { date: c.date, captured: c.captured, nearest: c.nearest, zoomIn: !!c.captured && c.minzoom != null && tz != null && tz < c.minzoom } };
+}
+function showSatellite(m: MlMap, spec: SatSpec) {
+  const { prov, id } = spec;
   if (satProv.get(m) !== prov) { clearSatellite(m); satProv.set(m, prov); }
-  const ly = satLayerYear(prov, year);
-  const id = satLayerId(ly);
-  satWanted.set(m, ly);
-  if (!m.getSource(id)) m.addSource(id, { type: 'raster', tiles: [satTilesFor(prov, ly)], tileSize: 256, maxzoom: satMaxzoom(prov, ly), attribution: satAttributionFor(prov, ly) });
+  satWanted.set(m, id);
+  satRecent.set(m, [...(satRecent.get(m) ?? []).filter((x) => x !== id), id]);
+  const top = satTop(m);
+  // fast clicking: layers still loading for an earlier click (visible, under the shown one) stop loading
+  for (const x of satIds(m)) if (x !== top && x !== id && satVisible(m, x)) m.setLayoutProperty(x, 'visibility', 'none');
+  if (!m.getSource(id)) m.addSource(id, { type: 'raster', tiles: [spec.tiles], tileSize: 256, maxzoom: spec.maxzoom, attribution: spec.attribution });
   if (!m.getLayer(id)) {
-    const shown = satIds(m).find((x) => m.getLayoutProperty(x, 'visibility') !== 'none');
     const road = m.getStyle().layers.find((l) => !OVERLAY_IDS.has(l.id) && !isSatLayerId(l.id) && /^(aeroway|road_|highway|railway)/.test(l.id))?.id;
-    m.addLayer({ id, type: 'raster', source: id, layout: { visibility: 'visible' }, paint: { 'raster-fade-duration': 0 } }, shown ?? (m.getLayer('ua-ground') ? 'ua-ground' : road));
-  } else m.setLayoutProperty(id, 'visibility', 'visible');
+    m.addLayer({ id, type: 'raster', source: id, layout: { visibility: 'visible' }, paint: { 'raster-fade-duration': 0 } }, top ?? (m.getLayer('ua-ground') ? 'ua-ground' : road));
+  } else {
+    if (top && top !== id) m.moveLayer(id, top);
+    m.setPaintProperty(id, 'raster-opacity-transition', { duration: 0, delay: 0 });
+    m.setPaintProperty(id, 'raster-opacity', 1);
+    m.setLayoutProperty(id, 'visibility', 'visible');
+  }
   if (prov === 'esri') watchEsri(m);
-  if (m.isSourceLoaded(id)) settleSatellite(m); else m.once('idle', () => settleSatellite(m));
+  if (!top || top === id) { settleSatellite(m); return; } // nothing to cover: it simply draws in
+  whenSatLoaded(m, id, () => settleSatellite(m));
 }
 function hideSatellite(m: MlMap) {
   satWanted.delete(m);
   stopEsriWatch(m);
   for (const id of satIds(m)) m.setLayoutProperty(id, 'visibility', 'none');
+}
+/** web-mercator tiles (256 px, as MapLibre asks for them at this map zoom) covering the view, at most `max` */
+function viewTiles(m: MlMap, maxzoom: number, max: number): { z: number; x: number; y: number }[] | null {
+  const z = Math.max(0, Math.min(maxzoom, Math.round(m.getZoom() + 1)));
+  const b = m.getBounds();
+  const a = tileOf(b.getWest(), b.getNorth(), z), c = tileOf(b.getEast(), b.getSouth(), z);
+  const n = (c.x - a.x + 1) * (c.y - a.y + 1);
+  if (n > max || n <= 0) return null;
+  const out = [];
+  for (let x = a.x; x <= c.x; x++) for (let y = a.y; y <= c.y; y++) out.push({ z, x, y });
+  return out;
+}
+/**
+ * Warm the HTTP cache (Wayback tiles: max-age 1 day) with the view's tiles of the neighbouring years' versions, so the
+ * next year click swaps at once. Plain fetches (as MapLibre makes them), no extra raster sources on the map.
+ */
+const prefetched = new Set<string>();
+function prefetchSat(m: MlMap, specs: SatSpec[], signal: AbortSignal) {
+  for (const sp of specs) {
+    const ts = viewTiles(m, sp.maxzoom, 60);
+    if (!ts) continue;
+    for (const t of ts) {
+      const url = sp.tiles.replace('{z}', String(t.z)).replace('{y}', String(t.y)).replace('{x}', String(t.x));
+      if (prefetched.has(url)) continue;
+      prefetched.add(url);
+      fetch(url, { signal }).then((r) => r.blob()).catch(() => prefetched.delete(url));
+    }
+  }
 }
 /** the «Супутник: Esri World Imagery, версія архіву 2019-09» line stacked above the attribution (bottom-right corner) */
 class SatCaption implements maplibregl.IControl {
@@ -326,6 +425,13 @@ export function MapView(props: MapViewProps) {
   });
   const overlays = useRef<Overlays | null>(null);
   const satCap = useRef<SatCaption | null>(null);
+  /** imagery versions + capture dates at the probed place (lib/wayback.ts); null until probed / on EOX */
+  const [satSite, setSatSite] = useState<SatSite | null>(null);
+  const satSiteRef = useRef<SatSite | null>(null);
+  satSiteRef.current = satSite;
+  /** where the imagery is dated: the zone centre, else (no zone) the map centre at z ≥ 12, snapped to a z14 tile */
+  const [viewPoint, setViewPoint] = useState<[number, number] | null>(null);
+  const [tileZoom, setTileZoom] = useState<number | undefined>(undefined);
   const yearRef = useRef(year);
   yearRef.current = year;
   /** marker mode below this zoom (R-MAP-1: lower while a big zone is open) */
@@ -366,7 +472,7 @@ export function MapView(props: MapViewProps) {
     // item 7a: satellite imagery (Esri World Imagery Wayback; EOX Sentinel-2 cloudless as the fallback) over the basemap fills, under the hatch/heat/roads/labels;
     // the source is only added once satellite is switched on (no requests otherwise)
     const u = getMapUi();
-    if (u.basemap === 'sat') showSatellite(m, yearRef.current);
+    if (u.basemap === 'sat') showSatellite(m, satSpec(satProviderOf(u.satEox), yearRef.current, satSiteRef.current));
     add({ id: 'ua-ground', type: 'fill', source: 'ua', minzoom: ovZ.current, filter: ['has', 'border'], layout: { visibility: u.basemap === 'sat' ? 'none' : 'visible' }, paint: { 'fill-pattern': 'nodata-hatch', 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0, 10, 1] } }, firstRoad);
     // the sea/rivers inside Ukraine's (maritime) outline stay plain water: a copy of the water fill over the hatch
     const water = layers.find((l) => l.id === 'water');
@@ -577,7 +683,16 @@ export function MapView(props: MapViewProps) {
     mapRef.current = map;
     satCap.current = new SatCaption();
     map.addControl(satCap.current, 'bottom-right');
-    satCap.current.set(getMapUi().basemap === 'sat' ? satCaption(getLocale(), yearRef.current, satProviderOf(getMapUi().satEox)) : null);
+    satCap.current.set(getMapUi().basemap === 'sat' ? satCaption(getLocale(), yearRef.current, satProviderOf(getMapUi().satEox), satSpec(satProviderOf(getMapUi().satEox), yearRef.current, null).shown) : null);
+    const centrePoint = () => {
+      setTileZoom(Math.round(map.getZoom() + 1));
+      if (map.getZoom() < 12) { setViewPoint(null); return; }
+      const c = map.getCenter();
+      const t = tileOf(c.lng, c.lat, 14);
+      setViewPoint((p) => { const q = tileCentre(t); return p && p[0] === q[0] && p[1] === q[1] ? p : q; });
+    };
+    map.on('moveend', centrePoint);
+    map.once('load', centrePoint);
     if (import.meta.env.DEV) (window as unknown as { __uhdMap?: MlMap }).__uhdMap = map; // dev-only handle for visual checks
     map.on('move', () => updateSpot(map));
     map.on('resize', () => applyLimits(map));
@@ -779,16 +894,33 @@ export function MapView(props: MapViewProps) {
 
   // the map year drives the satellite mosaic (strip / panel notes read it from mapUi); the caption sits by the attribution
   useEffect(() => { setMapUi({ mapYear: year }); }, [year]);
+  // the place whose imagery is dated: the zone (its bbox centre), else the map centre (snapped, z ≥ 12)
+  const satPoint = useMemo((): [number, number] | null => {
+    if (shape) { const [w, s, e, n] = bbox(shape); return [(w + e) / 2, (s + n) / 2]; }
+    return viewPoint;
+  }, [shape, viewPoint]);
+  const satProbe = ui.basemap === 'sat' && !ui.satEox && satPoint ? satPoint : null;
   useEffect(() => {
-    satCap.current?.set(ui.basemap === 'sat' ? satCaption(locale, year, satProviderOf(ui.satEox)) : null);
-  }, [ui.basemap, ui.satEox, year, locale]);
+    if (!satProbe) { setSatSite(null); return; }
+    const [lon, lat] = satProbe;
+    let live = true;
+    setSatSite(null);
+    const on = (s: SatSite) => { if (live) setSatSite(s); };
+    void probeSatSite(lon, lat, on);
+    return () => { live = false; unprobe(lon, lat, on); };
+  }, [satProbe?.[0], satProbe?.[1]]); // eslint-disable-line react-hooks/exhaustive-deps
+  const satNow = useMemo(() => satSpec(satProviderOf(ui.satEox), year, satSite, tileZoom), [ui.satEox, year, satSite, tileZoom]);
+  useEffect(() => {
+    satCap.current?.set(ui.basemap === 'sat' ? satCaption(locale, year, satNow.prov, satNow.shown) : null);
+    setMapUi({ satShown: ui.basemap === 'sat' ? satNow.shown : null });
+  }, [ui.basemap, satNow, year, locale]);
 
   // «Шари» panel (item 7): basemap, heat transparency, non-built dimming
   useEffect(() => {
     const m = mapRef.current;
     if (!ready(m)) return;
     const sat = ui.basemap === 'sat';
-    if (sat) showSatellite(m, year); else hideSatellite(m);
+    if (sat) showSatellite(m, satNow); else hideSatellite(m);
     // over imagery the no-data hatch and the water copy would hide the photo
     for (const id of ['ua-ground', 'ua-water']) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', sat ? 'none' : 'visible');
     if (m.getLayer('heat')) m.setPaintProperty('heat', 'raster-opacity', heatOpacity(layerT(ui.heatTransparency, ui.layer)));
@@ -796,7 +928,22 @@ export function MapView(props: MapViewProps) {
     updateSpot(m); // the light wash is lighter over imagery
     if (m.getLayer('nonbuilt')) m.setPaintProperty('nonbuilt', 'raster-opacity', muteApplies(getMapUi()) ? veilOpacity(ui) : 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ui.basemap, ui.satEox, ui.heatTransparency, ui.mute, ui.layer, year, mapRef]);
+  }, [ui.basemap, satNow.id, ui.heatTransparency, ui.mute, ui.layer, year, mapRef]);
+
+  // once every capture date is known: warm the cache with the neighbouring years' imagery for this view
+  useEffect(() => {
+    const m = mapRef.current;
+    if (!ready(m) || ui.basemap !== 'sat' || satNow.prov !== 'esri' || !satSite?.complete || year == null) return;
+    const ac = new AbortController();
+    const go = () => {
+      const near = [year - 1, year + 1].map((y) => satSpec('esri', y, satSite)).filter((sp, i, a) => sp.id !== satNow.id && a.findIndex((x) => x.id === sp.id) === i);
+      prefetchSat(m, near, ac.signal);
+    };
+    const t = window.setTimeout(go, 1500); // after the shown layer has had its turn
+    m.on('moveend', go);
+    return () => { window.clearTimeout(t); m.off('moveend', go); ac.abort(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ui.basemap, satNow.id, satSite?.complete, year, mapRef]);
 
   // the light wash follows the card: off while it is collapsed
   useEffect(() => {

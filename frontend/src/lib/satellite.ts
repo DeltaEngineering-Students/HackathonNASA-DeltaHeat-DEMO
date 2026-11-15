@@ -29,7 +29,9 @@ export function satAttribution(mosaic: number): string {
   return `<a href="https://cloudless.eox.at" target="_blank" rel="noreferrer">EOxCloudless</a> by EOX IT Services GmbH (Contains modified Copernicus Sentinel data ${dataYears(mosaic)}), ${lic}`;
 }
 export const satLayerId = (mosaic: number) => `sat-${mosaic}`;
-export const isSatLayerId = (id: string) => /^sat-\d{4}$/.test(id);
+/** EOX: `sat-YYYY` (mosaic year); Esri: `sat-w<release>` (one layer per Wayback tile version) */
+export const isSatLayerId = (id: string) => /^sat-w?\d+$/.test(id);
+export const esriLayerId = (release: number) => `sat-w${release}`;
 
 /** «Супутник: Sentinel‑2, 2019» (+ «(найближчий доступний рік)» when the mosaic year differs from the selected one) — the EOX caption */
 export function satCaptionEox(l: Locale, year: number | null | undefined): string {
@@ -77,10 +79,39 @@ export const esriTiles = (release: number) =>
 export const esriAttribution = (): string =>
   `<a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noreferrer">Esri World Imagery</a>: ${ESRI_CREDIT}`;
 
-export function satCaptionEsri(l: Locale, year: number | null | undefined): string {
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** genitive: «знімок липня 2024» */
+const MONTHS_UK = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
+/** YYYY-MM-DD → «Jul 2024» / «липня 2024» */
+export function captureMonth(l: Locale, iso: string): string {
+  const m = +iso.slice(5, 7) - 1;
+  return `${(l === 'uk' ? MONTHS_UK : MONTHS_EN)[m] ?? ''} ${iso.slice(0, 4)}`.trim();
+}
+/** what is shown (wayback.ts esriChoice): the capture date at the place when known, else the release date */
+export interface EsriShown {
+  date: string;
+  captured: string | null;
+  nearest: boolean;
+  /** the map is zoomed out to the undated overview mosaic: the dated capture shows only when zoomed in */
+  zoomIn?: boolean;
+}
+
+/**
+ * «Satellite: Esri World Imagery, captured Jul 2024» (+ «(nearest available)» when the capture is not from the selected
+ * year). Without a known capture: the release-date caption («archive version 2019-09 (imagery may be older)»). Without
+ * `shown`: the static release of the year.
+ */
+export function satCaptionEsri(l: Locale, year: number | null | undefined, shown?: EsriShown | null): string {
+  if (shown?.captured) {
+    const base = tr(l, 'map.satCaptured', { date: captureMonth(l, shown.captured) });
+    const near = shown.nearest ? `${base} ${tr(l, 'map.satNearestCapture')}` : base;
+    return shown.zoomIn ? `${near} ${tr(l, 'map.satZoomIn')}` : near;
+  }
   const v = esriVersion(year);
-  const base = tr(l, 'map.satCaption', { version: v.date.slice(0, 7) });
-  return year != null && year !== v.year ? `${base} ${tr(l, 'map.satNearest')}` : base;
+  const date = shown?.date ?? v.date;
+  const nearest = shown ? shown.nearest : year != null && year !== v.year;
+  const base = tr(l, 'map.satCaption', { version: date.slice(0, 7) });
+  return nearest ? `${base} ${tr(l, 'map.satNearest')}` : base;
 }
 
 // ── provider choice and fallback ──
@@ -110,7 +141,8 @@ export const satMaxzoom = (p: SatProvider, layerYear?: number) =>
   (p === 'eox' ? 17 : (layerYear != null ? ESRI_MAXZOOM_BY_YEAR[layerYear] : undefined) ?? ESRI_MAXZOOM);
 
 /** Caption by the attribution: the Esri one, or (after a fallback / `?sat=eox`) the EOX one. */
-export const satCaption = (l: Locale, year: number | null | undefined, p: SatProvider = 'esri') => (p === 'eox' ? satCaptionEox(l, year) : satCaptionEsri(l, year));
+export const satCaption = (l: Locale, year: number | null | undefined, p: SatProvider = 'esri', shown?: EsriShown | null) =>
+  (p === 'eox' ? satCaptionEox(l, year) : satCaptionEsri(l, year, shown));
 
 /** a missing tile (404) is normal for Wayback at high zoom; any other failure counts against the source */
 export const satErrorCounts = (status: number | undefined) => status !== 404;

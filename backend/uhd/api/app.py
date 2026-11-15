@@ -26,7 +26,8 @@ _SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Referrer-Policy": "sa
 # web workers from blob:, inline styles on map elements
 _CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob: https://tiles.openfreemap.org https://wayback.maptiles.arcgis.com https://tiles.maps.eox.at; "
-        "connect-src 'self' https://tiles.openfreemap.org https://wayback.maptiles.arcgis.com https://tiles.maps.eox.at; font-src 'self' data: https://tiles.openfreemap.org; "
+        "connect-src 'self' https://tiles.openfreemap.org https://wayback.maptiles.arcgis.com https://tiles.maps.eox.at "
+        "https://metadata.maptiles.arcgis.com https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/; font-src 'self' data: https://tiles.openfreemap.org; "
         "worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
 
 

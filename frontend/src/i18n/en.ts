@@ -223,6 +223,7 @@ export const en = {
   'strip.mutedWhat': ': fields, forests, meadows',
   'strip.basemap': 'Basemap',
   'strip.basemapWhat': ' — Esri World Imagery, archive {version}',
+  'strip.basemapWhatCaptured': ' — Esri World Imagery, captured {date}',
   'strip.basemapWhatEox': ' — Sentinel‑2 image {year}',
   'strip.refDashes': 'Dashed — reference forest',
   'strip.crossHatch': 'Cross-hatching — {what} (summer {year})',
@@ -287,6 +288,7 @@ export const en = {
   'tools.refLoading': 'Loading the outline…',
   'tools.refNone': 'The reference-forest outline for this area is not available yet.',
   'tools.satNote': 'Satellite: Esri World Imagery, archive {version}',
+  'tools.satNoteCaptured': 'Satellite: Esri World Imagery, captured {date}',
   'tools.satNoteEox': 'Satellite: EOxCloudless {year} (Sentinel‑2, ~10 m)',
 
   // ── Map (MapView.tsx, lib/overview.ts) ─────────────────────────────────────────────────────

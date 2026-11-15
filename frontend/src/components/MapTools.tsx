@@ -5,7 +5,7 @@ import { Hint, useHint } from './Hint';
 import type { GlossaryKey } from '../lib/glossary';
 import type { DrawMode } from '../state/store';
 import { showAllUkraine } from '../lib/ukraine';
-import { esriVersion, satMosaicYear } from '../lib/satellite';
+import { captureMonth, esriVersion, satMosaicYear } from '../lib/satellite';
 import { CircleIcon, Minus, Plus, PolyIcon, UaIcon } from './icons';
 import { useLocale, useT } from '../i18n';
 import { pctUi } from './mapI18n';
@@ -126,7 +126,7 @@ export function LayersPanel() {
           )}
           {ui.showReference && ui.reportId && ui.reference === 'loading' && <p className="xs lp-note">{t('tools.refLoading')}</p>}
           {ui.showReference && ui.reportId && ui.reference === 'none' && <p className="xs lp-note" data-testid="reference-none">{t('map.refNone')}</p>}
-          {ui.basemap === 'sat' && <p className="xs lp-note">{ui.satEox ? t('tools.satNoteEox', { year: satMosaicYear(ui.mapYear) }) : t('tools.satNote', { version: esriVersion(ui.mapYear).date.slice(0, 7) })}</p>}
+          {ui.basemap === 'sat' && <p className="xs lp-note">{ui.satEox ? t('tools.satNoteEox', { year: satMosaicYear(ui.mapYear) }) : (ui.satShown?.captured ? t('tools.satNoteCaptured', { date: captureMonth(l, ui.satShown.captured) }) : t('tools.satNote', { version: (ui.satShown?.date ?? esriVersion(ui.mapYear).date).slice(0, 7) }))}</p>}
         </div>
       )}
     </div>

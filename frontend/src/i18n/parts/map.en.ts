@@ -11,4 +11,10 @@ export const mapEn = {
   'map.occAttr': 'Occupied areas: Ministry of Development №376',
   'map.satNearest': '(nearest available version)',
   'map.satNearestEox': '(nearest available year)',
+  /** Esri caption with the capture date at the place (wayback.ts): {date} = «Jul 2024» */
+  'map.satCaptured': 'Satellite: Esri World Imagery, captured {date}',
+  /** the capture is not from the selected map year */
+  'map.satNearestCapture': '(nearest available)',
+  /** zoomed out below the dated imagery (Esri shows its undated overview mosaic there) */
+  'map.satZoomIn': '· zoom in to see it',
 } as const;
