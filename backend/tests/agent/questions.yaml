@@ -1,0 +1,132 @@
+# Test questions for the AI analyst (decision #19). Run after prompt/tool changes:
+#   ANTHROPIC_API_KEY=... uv run python -m uhd.agent.evalrun tests/agent/questions.yaml
+# expect_tools: every listed tool must be called at least once (order free);
+# any_of: at least one of these must be called; forbid_tools: must not be called;
+# checks: extra assertions on the final answer (validator_ok = all numbers sourced).
+- id: q01_headline
+  question: "Чи Позняки гарячіші за природу навколо Києва і наскільки?"
+  expect_tools: [create_report]
+  any_of: [search_places, get_report]
+  checks: [validator_ok]
+- id: q02_trend_significance
+  question: "Чи розрив у Позняках росте з роками, і чи це значуща зміна?"
+  expect_tools: [create_report]
+  any_of: [zone_timeseries, get_report, create_report]  # a fresh report already carries the trend and its p
+  checks: [validator_ok, mentions_verdict]
+- id: q03_verify_number
+  question: "У звіті по Позняках написано, що розрив у 2025 році такий-то. Перевір цю цифру."
+  expect_tools: []
+  any_of: [get_report, zone_timeseries, create_report]
+  checks: [validator_ok]
+- id: q04_date_scene
+  question: "Що було над Позняками 20 червня 2021 року? Які знімки, хмарність, температура?"
+  expect_tools: [list_scenes]
+  any_of: [get_scene_stats, get_weather]
+  checks: [validator_ok, nearest_date_explained]
+- id: q05_weather_anomaly
+  question: "Чому у 2019 році розрив у Позняках вищий, ніж у сусідні роки? Може, погода?"
+  expect_tools: [get_weather]
+  any_of: [zone_timeseries, list_scenes, get_report]
+  checks: [validator_ok, facts_vs_hypotheses]
+- id: q06_compare_two
+  question: "Порівняй Позняки і Теремки: де розрив з лісом більший?"
+  expect_tools: []
+  any_of: [rank_zones, create_report]
+  checks: [validator_ok]
+- id: q07_rank_districts
+  question: "Які райони Києва найгарячіші відносно лісу у 2025 році?"
+  expect_tools: []
+  any_of: [rank_zones, get_overview]  # get_overview carries the district ranking for a city
+  checks: [validator_ok]
+- id: q08_land_change
+  question: "Скільки нової забудови з'явилось в Оболоні за 2013–2025?"
+  expect_tools: [land_change]
+  any_of: [create_report, get_report]
+  checks: [validator_ok]
+- id: q09_green_suspects
+  question: "Чи зменшилась зелень у Позняках, і чи це пов'язано з теплом?"
+  expect_tools: []
+  any_of: [land_change, zone_timeseries, get_report]
+  checks: [validator_ok, no_causal_share]
+- id: q10_reference_trend
+  question: "Може, просто клімат теплішає? Як змінювалась температура лісу навколо Києва?"
+  expect_tools: []
+  any_of: [get_report, zone_timeseries, create_report]
+  checks: [validator_ok]
+- id: q11_climate
+  question: "Наскільки спекотніше буде влітку в Києві у 2070-х за песимістичним сценарієм?"
+  expect_tools: [climate_projection]
+  checks: [validator_ok, air_not_lst]
+- id: q12_map
+  question: "Покажи на мапі розрив температури для Харкова у 2024 році."
+  expect_tools: [set_map_view]
+  any_of: [search_places]
+  checks: []
+- id: q13_new_report_custom_years
+  question: "Зроби звіт по Гатному тільки за 2016–2024 і скажи вердикт."
+  expect_tools: [create_report]
+  checks: [validator_ok, mentions_verdict]
+- id: q14_web_hypothesis
+  question: "Чому в Салтівці у 2023 році могла впасти температура поверхні? Пошукай в інтернеті можливі причини."
+  expect_tools: []
+  any_of: [create_report, get_report, zone_timeseries]
+  server_tools: [web_search]
+  checks: [validator_ok, facts_vs_hypotheses, has_links]
+- id: q15_air_vs_surface
+  question: "Тобто в Позняках повітря на 8 градусів тепліше, ніж у лісі?"
+  expect_tools: []
+  any_of: [create_report, get_report]
+  checks: [explains_lst_not_air]
+- id: q16_list_reports
+  question: "Які звіти вже є?"
+  team_only: true
+  expect_tools: [list_reports]
+  checks: [validator_ok]
+- id: q17_outside_coverage
+  question: "Порахуй розрив для центру Варшави."
+  expect_tools: []
+  any_of: []  # declining without a tool call is fine: Poland is outside the data
+  forbid_tools: [create_report]
+  checks: [explains_coverage]
+- id: q18_causal_trap
+  question: "Скільки відсотків перегріву в Позняках через нові ЖК?"
+  expect_tools: []
+  any_of: [create_report, get_report, land_change]
+  checks: [no_causal_share]
+- id: q19_scene_count
+  question: "Скільки чистих знімків Landsat використано для Львова у 2020 році?"
+  expect_tools: []
+  any_of: [create_report, zone_timeseries, list_scenes]
+  checks: [validator_ok]
+- id: q20_sandbox
+  team_only: true
+  question: "Порахуй кореляцію між NDVI і розривом по всіх районах Києва за 2025 рік."
+  expect_tools: []  # run_analysis only when UHD_AGENT_SANDBOX_ENABLED; without it: inputs, no invented r
+  any_of: [rank_zones, create_report, list_reports, get_overview, zone_timeseries]
+  checks: [validator_ok]
+- id: q21_compare_table
+  # Роман's real prompt (15.11): multi-criteria comparison → one rank_zones(metric=all), one compact table, a detailed conclusion
+  question: "порівняй райони києва за різними крітеріями по всіх роках і зроби таблицю та дай читкий і розгорнутий висновок"
+  expect_tools: [rank_zones]
+  checks: [validator_ok, has_table, no_year_grid]
+- id: q22_compare_table_en
+  question: "Compare Kyiv's districts on several criteria across all years, make a table and give a clear, detailed conclusion."
+  context: {lang: en}
+  expect_tools: [rank_zones]
+  checks: [validator_ok, has_table, no_year_grid]
+- id: q23_compare_regions
+  # Роман's real prompt (15.11): ended with too_many_steps; now one compare_regions call + occupation caveat for Crimea
+  question: "can u compare different regions such as Crimea and rivnenska region"
+  context: {lang: en}
+  expect_tools: [compare_regions]
+  forbid_tools: [rank_zones]
+  checks: [validator_ok]
+- id: q24_regions_followup
+  # Роман's follow-up (same conversation): a short answer from what is already known, no new tool storm
+  history:
+    - {role: user, content: "can u compare different regions such as Crimea and rivnenska region"}
+    - {role: assistant, content: "Crimea (occupied; data exist but 2022-2025 changes may be destruction) is hotter than Rivne oblast on the surface; details in the table."}
+  question: "can u explin without many details"
+  context: {lang: en}
+  forbid_tools: [rank_zones, create_report]
+  checks: [validator_ok]

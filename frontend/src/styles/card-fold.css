@@ -1,0 +1,17 @@
+/* QA R7-1 / R7-2: the card keeps the whole chart above the pinned footer at 1280×720 and «Що гріє» at 1440×900
+   (own file: app.css is shared by two engineers) */
+.answer .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; margin-top: 22px; margin-bottom: 4px; }
+.answer .chart-head .chart-title { margin: 0; }
+.answer .chart-head .card-year { margin: 0; white-space: normal; font-size: 13px; }
+.answer.short .chart-head { margin-top: 10px; }
+/* ≤ 820 px tall the caption is hidden (app.css .tiny); the year line stays alone on that row */
+.answer.tiny .chart-head { margin-top: 8px; }
+.answer .card-credit { margin-top: 10px; text-align: left; }
+.answer .card-foot { padding-top: 12px; padding-bottom: 20px; }
+/* short screens: a narrower gutter between the number and the trend column lets «поверхня гарячіша за ліс, середнє за
+   N літніх сезонів» wrap to fewer lines */
+.answer.tiny .nums { gap: 22px; margin-top: 12px; }
+.answer.tiny .nums-side { gap: 8px; }
+.answer.tiny .lead { margin-top: 8px !important; }
+/* ≤ 820 px tall: one step smaller lead (a 5-line verdict pushed the chart under the footer, Нижні Сади) */
+.answer.tiny .lead { font-size: 18px; line-height: 1.33; }

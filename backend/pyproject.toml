@@ -1,0 +1,48 @@
+[project]
+name = "uhd"
+version = "0.1.0"
+description = "Urban Heat Detective — backend (API, tiles, AI analyst scaffold)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "rasterio>=1.4",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    "pillow>=10.4",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+    "jsonschema>=4.23",
+    "anthropic>=2.8",
+    "openpyxl>=3.1",
+    "fpdf2>=2.8",
+    "segno>=1.6",
+]
+
+[dependency-groups]
+dev = [
+    "pypdf>=5",
+    "pytest>=8.3",
+    "pytest-timeout>=2.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["uhd"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -m 'not server_data and not network'"
+markers = [
+    "server_data: needs the real raster data under /srv/landsat (run on the server: pytest -m server_data)",
+    "network: calls an external HTTP service",
+    "real_science: use the real uhd.science package instead of the fixture engine",
+]
+timeout = 60

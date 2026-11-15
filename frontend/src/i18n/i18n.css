@@ -1,0 +1,4 @@
+/* «EN | УКР» switch (I18N.md §3) — the .seg segmented control, sized to sit with the header pills */
+.lang-switch { align-self: center; flex: none; box-shadow: 0 1px 3px rgba(0, 0, 0, .18); background: var(--surf); }
+.lang-switch button { min-width: 40px; padding: 0 9px; font-weight: 600; letter-spacing: .02em; }
+.lang-switch button[aria-pressed='true'] { background: var(--surf2); }

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="116 74 280 256" width="512" height="468" role="img" aria-label="DELTAHEAT Icon">
+  <defs>
+    <linearGradient id="thermalRight" x1="256" y1="84" x2="365" y2="318" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ff2e93"/>
+      <stop offset="50%" stop-color="#ff5aa8"/>
+      <stop offset="100%" stop-color="#ff8a3d"/>
+    </linearGradient>
+
+    <linearGradient id="thermalLeft" x1="256" y1="90" x2="175" y2="290" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ff7744"/>
+      <stop offset="50%" stop-color="#ff5aa8"/>
+      <stop offset="100%" stop-color="#e02e88"/>
+    </linearGradient>
+
+    <linearGradient id="forestBlue" x1="138" y1="295" x2="256" y2="145" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4e73ff"/>
+      <stop offset="65%" stop-color="#7f9bff"/>
+      <stop offset="100%" stop-color="#9cb2ff"/>
+    </linearGradient>
+
+    <linearGradient id="forestBottom" x1="140" y1="295" x2="340" y2="315" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3c5fe6"/>
+      <stop offset="100%" stop-color="#708eff"/>
+    </linearGradient>
+  </defs>
+
+  <g stroke-linejoin="round" stroke-linecap="round">
+    <path d="M 212 124 L 134 260 Q 127 272 134 284 L 148 308 Q 154 318 166 318 L 180 290 L 234 162 Z" fill="url(#forestBlue)"/>
+    <path d="M 234 92 Q 239 84 248 84 L 264 84 L 282 116 L 182 290 L 150 290 L 234 142 Z" fill="url(#thermalLeft)"/>
+    <path d="M 134 284 L 148 308 Q 154 318 166 318 L 322 318 L 338 290 L 137 290 Z" fill="url(#forestBottom)"/>
+    <path d="M 234 92 Q 239 84 248 84 L 264 84 Q 273 84 278 92 L 378 266 Q 385 278 378 290 L 364 310 Q 358 318 346 318 L 318 318 L 334 290 L 234 116 Z" fill="url(#thermalRight)"/>
+  </g>
+</svg>
